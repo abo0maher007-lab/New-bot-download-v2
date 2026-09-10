@@ -1,6 +1,6 @@
 pyrogram
 tgcrypto
-yt-dlp
+speedtest-cli
 aiohttp
 aiofiles
 curl_cffi
