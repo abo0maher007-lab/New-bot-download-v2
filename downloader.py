@@ -1,46 +1,30 @@
-import os
 import asyncio
-from playwright.async_api import async_playwright
-import yt_dlp
+from curl_cffi import requests
 
-async def get_cloudflare_cookies(url: str):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
-        
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-        await asyncio.sleep(5)
-        
-        cookies = await context.cookies()
-        user_agent = await page.evaluate("navigator.userAgent")
-        
-        await browser.close()
-        
-        cookie_header = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
-        return cookie_header, user_agent
-
-def download_video_stream(url: str, cookie_header: str, user_agent: str, output_path: str):
-    ydl_opts = {
-        'outtmpl': output_path,
-        'http_headers': {
-            'User-Agent': user_agent,
-            'Cookie': cookie_header,
-            'Referer': 'https://shahidtv.net/',
-        },
-        'extractor_args': {
-            'generic': ['impersonate']
-        },
-        'concurrent_fragment_downloads': 5,
-        'quiet': True,
+def download_file_with_curl(url: str, output_path: str):
+    """
+    تحميل الفيديو باستخدام curl_cffi للمرور من حماية Cloudflare TLS Fingerprint
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+        'Referer': 'https://shahidtv.net/',
+        'Origin': 'https://shahidtv.net',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    # إرسال طلب بحجم القطع Streaming للتأكد من المحاكاة
+    with requests.get(url, headers=headers, impersonate="chrome120", stream=True, timeout=120) as response:
+        response.raise_for_status()
+        with open(output_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):  # تحميل 1MB في كل دورة
+                if chunk:
+                    f.write(chunk)
 
 async def fetch_video(url: str, output_file: str):
-    cookie_header, user_agent = await get_cloudflare_cookies(url)
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, download_video_stream, url, cookie_header, user_agent, output_file)
+    await loop.run_in_executor(None, download_file_with_curl, url, output_file)
