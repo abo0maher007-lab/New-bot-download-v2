@@ -25,9 +25,13 @@ def make_progress_bar(current, total, length=10):
 async def start_cmd(client: Client, message: Message):
     await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك مع عرض التقدم المباشر.")
 
-# تم تصحيح الفلتر بإضافة الأقواس () إلى filters.command()
-@app.on_message(filters.text & ~filters.command())
+# تم الاعتماد على filters.private بدلاً من filters.command لمنع الخطأ
+@app.on_message(filters.text & filters.private)
 async def handle_video_download(client: Client, message: Message):
+    # إذا كانت الرسالة عبارة عن أمر مثل /start تجاهلها هنا لأن هناك معالج مخصص لها فوق
+    if message.text.startswith("/"):
+        return
+
     url = message.text.strip()
 
     if "b2.shahidtv.net" not in url:
@@ -109,5 +113,5 @@ async def handle_video_download(client: Client, message: Message):
             os.remove(output_filename)
 
 if __name__ == '__main__':
-    print("البوت يعمل الآن بنجاح مع لوحة التقدم...")
+    print("البوت يعمل الآن بنجاح...")
     app.run()
