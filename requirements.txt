@@ -1,2 +1,3 @@
-python-telegram-bot>=20.0
+pyrogram
+tgcrypto
 curl_cffi>=0.7.0
