@@ -1,53 +1,116 @@
 import os
+import time
+import asyncio
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from downloader import fetch_video
+from pyrogram import Client, filters
+from pyrogram.types import Message
+from downloader import fetch_video, format_bytes, format_time
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "ضع_توكن_البوت_هنا")
+API_ID = int(os.getenv("API_ID", "0"))
+API_HASH = os.getenv("API_HASH", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+app = Client("shahid_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك.")
+logging.basicConfig(level=logging.INFO)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
-    
+def make_progress_bar(current, total, length=10):
+    if total <= 0:
+        return "░" * length
+    percentage = current / total
+    filled = int(length * percentage)
+    return "█" * filled + "░" * (length - filled)
+
+@app.on_message(filters.command("start"))
+async def start_cmd(client: Client, message: Message):
+    await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك مع عرض التقدم المباشر.")
+
+@app.on_message(filters.text & ~filters.command)
+async def handle_video_download(client: Client, message: Message):
+    url = message.text.strip()
+
     if "b2.shahidtv.net" not in url:
-        await update.message.reply_text("الرابط غير مدعوم. يرجى إرسال رابط صحيح من النطاق المطلوب.")
+        await message.reply_text("الرابط غير مدعوم. يرجى إرسال رابط صحيح من النطاق المطلوب.")
         return
 
-    status_msg = await update.message.reply_text("⏳ جاري التغلب على حماية Cloudflare وتنزيل الفيديو...")
-    output_filename = f"video_{update.message.message_id}.mp4"
+    status_msg = await message.reply_text("⏳ جاري الاتصال بالسيرفر والتغلب على حماية Cloudflare...")
+    output_filename = f"video_{message.id}.mp4"
+    
+    loop = asyncio.get_running_loop()
+    last_update = [0]
+
+    # كولباك لمتابعة تقدم التحميل من الخادم
+    def download_progress(downloaded, total, speed, eta):
+        now = time.time()
+        if now - last_update[0] < 1.5 and downloaded != total:
+            return
+        last_update[0] = now
+
+        percent = (downloaded / total * 100) if total > 0 else 0
+        bar = make_progress_bar(downloaded, total)
+        
+        text = (
+            f"⬇️ **جاري تحميل الفيديو من السيرفر...**\n\n"
+            f"[{bar}] `{percent:.1f}%`\n\n"
+            f"🚀 **السرعة:** `{format_bytes(speed)}/s`\n"
+            f"📦 **المحمل:** `{format_bytes(downloaded)}` من `{format_bytes(total)}`\n"
+            f"⏱ **الوقت المتبقي:** `{format_time(eta)}`"
+        )
+        
+        asyncio.run_coroutine_threadsafe(status_msg.edit_text(text, parse_mode="Markdown"), loop)
+
+    # كولباك لمتابعة تقدم الرفع إلى تلجرام
+    start_upload_time = time.time()
+    async def upload_progress(current, total):
+        now = time.time()
+        if now - last_update[0] < 1.5 and current != total:
+            return
+        last_update[0] = now
+
+        percent = (current / total * 100) if total > 0 else 0
+        bar = make_progress_bar(current, total)
+        elapsed = now - start_upload_time
+        speed = current / elapsed if elapsed > 0 else 0
+        eta = (total - current) / speed if speed > 0 else 0
+
+        text = (
+            f"⬆️ **جاري رفع الفيديو إلى تلجرام...**\n\n"
+            f"[{bar}] `{percent:.1f}%`\n\n"
+            f"🚀 **السرعة:** `{format_bytes(speed)}/s`\n"
+            f"📦 **المرفوع:** `{format_bytes(current)}` من `{format_bytes(total)}`\n"
+            f"⏱ **الوقت المتبقي:** `{format_time(eta)}`"
+        )
+        
+        try:
+            await status_msg.edit_text(text, parse_mode="Markdown")
+        except Exception:
+            pass
 
     try:
-        await fetch_video(url, output_filename)
+        # التحميل
+        await fetch_video(url, output_filename, download_progress)
         
-        await status_msg.edit_text("⬆️ جاري رفع الفيديو إلى تلجرام...")
+        await status_msg.edit_text("⬆️ اكتمل التحميل، جاري بدء الرفع...")
         
-        with open(output_filename, 'rb') as video_file:
-            await update.message.reply_video(
-                video=video_file, 
-                caption="تم التحميل بنجاح!",
-                supports_streaming=True
-            )
-            
+        # الرفع
+        await client.send_video(
+            chat_id=message.chat.id,
+            video=output_filename,
+            caption="تم التحميل والرفع بنجاح!",
+            supports_streaming=True,
+            progress=upload_progress
+        )
+        
         await status_msg.delete()
 
     except Exception as e:
-        logging.error(f"Download Error: {e}")
-        error_message = str(e) if str(e) else repr(e)
-        await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل:\n`{error_message}`", parse_mode="Markdown")
-    
+        logging.error(f"Error: {e}")
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء العملية:\n`{str(e)}`", parse_mode="Markdown")
+        
     finally:
         if os.path.exists(output_filename):
             os.remove(output_filename)
 
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("البوت يعمل الآن...")
-    app.run_polling()
+    print("البوت يعمل الآن بنجاح مع لوحة التقدم...")
+    app.run()
