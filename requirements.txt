@@ -1,3 +1,2 @@
 python-telegram-bot>=20.0
-yt-dlp
-curl_cffi
+curl_cffi>=0.7.0
