@@ -22,7 +22,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     output_filename = f"video_{update.message.message_id}.mp4"
 
     try:
-        # استدعاء دالة التحميل المحدثة عبر curl_cffi
+        # استدعاء دالة التحميل
         await fetch_video(url, output_filename)
         
         await status_msg.edit_text("⬆️ جاري رفع الفيديو إلى تلجرام...")
@@ -30,7 +30,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(output_filename, 'rb') as video_file:
             await update.message.reply_video(
                 video=video_file, 
-                caption=" تم التحميل بنجاح عبر التجاوز المباشر!",
+                caption="تم التحميل بنجاح!",
                 supports_streaming=True
             )
             
@@ -38,7 +38,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logging.error(f"Download Error: {e}")
-        await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل:\n`{str(e)}`", parse_mode="Markdown")
+        # عرض نص الخطأ بوضوح في حال حدوث مشكلة شبكة أو سيرفر
+        error_message = str(e) if str(e) else repr(e)
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل:\n`{error_message}`", parse_mode="Markdown")
     
     finally:
         if os.path.exists(output_filename):
