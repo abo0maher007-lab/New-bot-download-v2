@@ -1,7 +1,2 @@
-pyrogram
-tgcrypto
-aiohttp
-aiofiles
-yt-dlp
-curl_cffi
+url_cffi
 python-telegram-bot>=20.0
