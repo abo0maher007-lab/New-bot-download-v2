@@ -25,7 +25,7 @@ def make_progress_bar(current, total, length=10):
 async def start_cmd(client: Client, message: Message):
     await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك مع عرض التقدم المباشر.")
 
-@app.on_message(filters.text & ~filters.command)
+@app.on_message(filters.text & ~filters.command())
 async def handle_video_download(client: Client, message: Message):
     url = message.text.strip()
 
