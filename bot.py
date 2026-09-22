@@ -25,6 +25,7 @@ def make_progress_bar(current, total, length=10):
 async def start_cmd(client: Client, message: Message):
     await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك مع عرض التقدم المباشر.")
 
+# تم تصحيح الفلتر بإضافة الأقواس () إلى filters.command()
 @app.on_message(filters.text & ~filters.command())
 async def handle_video_download(client: Client, message: Message):
     url = message.text.strip()
@@ -39,7 +40,6 @@ async def handle_video_download(client: Client, message: Message):
     loop = asyncio.get_running_loop()
     last_update = [0]
 
-    # كولباك لمتابعة تقدم التحميل من الخادم
     def download_progress(downloaded, total, speed, eta):
         now = time.time()
         if now - last_update[0] < 1.5 and downloaded != total:
@@ -59,7 +59,6 @@ async def handle_video_download(client: Client, message: Message):
         
         asyncio.run_coroutine_threadsafe(status_msg.edit_text(text, parse_mode="Markdown"), loop)
 
-    # كولباك لمتابعة تقدم الرفع إلى تلجرام
     start_upload_time = time.time()
     async def upload_progress(current, total):
         now = time.time()
@@ -87,12 +86,10 @@ async def handle_video_download(client: Client, message: Message):
             pass
 
     try:
-        # التحميل
         await fetch_video(url, output_filename, download_progress)
         
         await status_msg.edit_text("⬆️ اكتمل التحميل، جاري بدء الرفع...")
         
-        # الرفع
         await client.send_video(
             chat_id=message.chat.id,
             video=output_filename,
