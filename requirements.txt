@@ -1,2 +1,2 @@
-url_cffi
 python-telegram-bot>=20.0
+curl_cffi
