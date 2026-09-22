@@ -1,7 +1,24 @@
+import time
 import asyncio
 from curl_cffi import requests
 
-def download_file(url: str, output_path: str):
+def format_bytes(size):
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} TB"
+
+def format_time(seconds):
+    if seconds < 0 or seconds > 86400:
+        return "00:00"
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
+
+def download_file_with_progress(url: str, output_path: str, progress_callback):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Accept': '*/*',
@@ -16,8 +33,7 @@ def download_file(url: str, output_path: str):
         'Sec-Fetch-Site': 'same-site',
     }
 
-    # استخدام محاكاة متصفح Chrome لتجاوز TLS Fingerprint الخاصة بـ Cloudflare
-    r = requests.get(
+    response = requests.get(
         url,
         headers=headers,
         impersonate="chrome124",
@@ -25,14 +41,30 @@ def download_file(url: str, output_path: str):
         timeout=300
     )
     
-    r.raise_for_status()
+    response.raise_for_status()
+    total_length = int(response.headers.get('content-length', 0))
 
-    # كتابة بيانات الفيديو على أجزاء لمنع استهلاك الذاكرة
+    downloaded = 0
+    start_time = time.time()
+    last_update_time = start_time
+
     with open(output_path, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024 * 1024):
+        for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1MB
             if chunk:
                 f.write(chunk)
+                downloaded += len(chunk)
+                
+                now = time.time()
+                # تحديث لوحة التقدم كل ثانية ونصف لتجنب حظر التلجرام
+                if now - last_update_time >= 1.5 or downloaded == total_length:
+                    last_update_time = now
+                    elapsed_time = now - start_time
+                    speed = downloaded / elapsed_time if elapsed_time > 0 else 0
+                    eta = (total_length - downloaded) / speed if speed > 0 and total_length > 0 else 0
+                    
+                    if progress_callback:
+                        progress_callback(downloaded, total_length, speed, eta)
 
-async def fetch_video(url: str, output_file: str):
+async def fetch_video(url: str, output_file: str, progress_callback):
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, download_file, url, output_file)
+    await loop.run_in_executor(None, download_file_with_progress, url, output_file, progress_callback)
