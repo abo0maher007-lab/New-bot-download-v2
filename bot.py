@@ -22,17 +22,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     output_filename = f"video_{update.message.message_id}.mp4"
 
     try:
+        # استدعاء دالة التحميل المحدثة عبر curl_cffi
         await fetch_video(url, output_filename)
         
         await status_msg.edit_text("⬆️ جاري رفع الفيديو إلى تلجرام...")
         
         with open(output_filename, 'rb') as video_file:
-            await update.message.reply_video(video=video_file, caption="تم التحميل بنجاح!")
+            await update.message.reply_video(
+                video=video_file, 
+                caption=" تم التحميل بنجاح عبر التجاوز المباشر!",
+                supports_streaming=True
+            )
             
         await status_msg.delete()
 
     except Exception as e:
-        await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل: {str(e)}")
+        logging.error(f"Download Error: {e}")
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل:\n`{str(e)}`", parse_mode="Markdown")
     
     finally:
         if os.path.exists(output_filename):
