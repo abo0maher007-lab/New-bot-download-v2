@@ -22,7 +22,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     output_filename = f"video_{update.message.message_id}.mp4"
 
     try:
-        # استدعاء دالة التحميل
         await fetch_video(url, output_filename)
         
         await status_msg.edit_text("⬆️ جاري رفع الفيديو إلى تلجرام...")
@@ -38,7 +37,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logging.error(f"Download Error: {e}")
-        # عرض نص الخطأ بوضوح في حال حدوث مشكلة شبكة أو سيرفر
         error_message = str(e) if str(e) else repr(e)
         await status_msg.edit_text(f"❌ حدث خطأ أثناء التحميل:\n`{error_message}`", parse_mode="Markdown")
     
