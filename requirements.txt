@@ -5,3 +5,5 @@ aiofiles
 speedtest-cli
 yt-dlp
 curl_cffi
+python-telegram-bot>=20.0
+playwright
