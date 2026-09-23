@@ -6,13 +6,17 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from downloader import fetch_video, format_bytes, format_time
 
+# قراءة المتغيرات من بيئة التشغيل
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-app = Client("shahid_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
 logging.basicConfig(level=logging.INFO)
+
+if not API_ID or not API_HASH or not BOT_TOKEN:
+    raise ValueError("❌ خطأ: يجب إدخال API_ID و API_HASH و BOT_TOKEN في متغيرات البيئة (Variables) في Railway!")
+
+app = Client("shahid_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 def make_progress_bar(current, total, length=10):
     if total <= 0:
@@ -23,18 +27,16 @@ def make_progress_bar(current, total, length=10):
 
 @app.on_message(filters.command("start"))
 async def start_cmd(client: Client, message: Message):
-    await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو من b2.shahidtv.net وسأقوم بتحميله لك مع عرض التقدم المباشر.")
+    await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو وسأقوم بتحميله لك مع عرض لوحة التقدم المباشرة.")
 
-# تم الاعتماد على filters.private بدلاً من filters.command لمنع الخطأ
 @app.on_message(filters.text & filters.private)
 async def handle_video_download(client: Client, message: Message):
-    # إذا كانت الرسالة عبارة عن أمر مثل /start تجاهلها هنا لأن هناك معالج مخصص لها فوق
     if message.text.startswith("/"):
         return
 
     url = message.text.strip()
 
-    if "b2.shahidtv.net" not in url:
+    if "b2.shahidtv.net" not in url and "shahidtv.net" not in url:
         await message.reply_text("الرابط غير مدعوم. يرجى إرسال رابط صحيح من النطاق المطلوب.")
         return
 
@@ -44,6 +46,7 @@ async def handle_video_download(client: Client, message: Message):
     loop = asyncio.get_running_loop()
     last_update = [0]
 
+    # تقدم التنزيل من السيرفر
     def download_progress(downloaded, total, speed, eta):
         now = time.time()
         if now - last_update[0] < 1.5 and downloaded != total:
@@ -63,6 +66,7 @@ async def handle_video_download(client: Client, message: Message):
         
         asyncio.run_coroutine_threadsafe(status_msg.edit_text(text, parse_mode="Markdown"), loop)
 
+    # تقدم الرفع إلى تلجرام
     start_upload_time = time.time()
     async def upload_progress(current, total):
         now = time.time()
@@ -112,6 +116,10 @@ async def handle_video_download(client: Client, message: Message):
         if os.path.exists(output_filename):
             os.remove(output_filename)
 
+async def main():
+    await app.start()
+    print("✅ تم تشغيل البوت بنجاح...")
+    await asyncio.Event().wait()
+
 if __name__ == '__main__':
-    print("البوت يعمل الآن بنجاح...")
-    app.run()
+    asyncio.run(main())
