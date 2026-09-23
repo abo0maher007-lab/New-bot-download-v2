@@ -20,13 +20,12 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
-    # إنشاء جلسة impersonate للالتفاف على Cloudflare و IP Blocking
+    # محاكاة متصفح Chrome متكامل
     session = requests.Session(impersonate="chrome124")
     
-    # الترويسات الدقيقة المحاكية لمتصفح Chrome على الكمبيوتر
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+        'Accept': '*/*',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
         'Referer': 'https://shahidtv.net/',
         'Origin': 'https://shahidtv.net',
@@ -35,15 +34,21 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
         'Sec-Ch-Ua-Platform': '"Windows"',
         'Sec-Fetch-Dest': 'video',
         'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-        'Range': 'bytes=0-',
+        'Sec-Fetch-Site': 'cross-site',
     }
 
     proxies = None
-    if proxy and proxy.strip():
-        proxies = {"http": proxy, "https": proxy}
+    # إعطاء الأولوية للبروكسي الممرر أو جلب قيمة PROXY_URL من المتغيرات
+    env_proxy = os.getenv("PROXY_URL", "").strip()
+    active_proxy = proxy if (proxy and proxy.strip()) else env_proxy
 
-    # تنفيذ الطلب المباشر للملف
+    if active_proxy:
+        proxies = {
+            "http": active_proxy,
+            "https": active_proxy
+        }
+        print(f"📡 Downloading using Proxy: {active_proxy.split('@')[-1] if '@' in active_proxy else active_proxy}")
+
     response = session.get(
         url,
         headers=headers,
@@ -54,17 +59,14 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
     )
 
     response.raise_for_status()
-    
-    # تحديد حجم الملف الكلي
     total_length = int(response.headers.get('content-length', 0))
 
     downloaded = 0
     start_time = time.time()
     last_update_time = start_time
 
-    # كتابة البيانات وحساب سرعة وشريط التقدم
     with open(output_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=1024 * 1024):
+        for chunk in response.iter_content(chunk_size=2 * 1024 * 1024):
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
