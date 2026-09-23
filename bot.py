@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 if not BOT_TOKEN:
-    raise ValueError("❌ خطأ: لم يتم العثور على BOT_TOKEN في البيئة أو ملف .env!")
+    raise ValueError("❌ خطأ: لم يتم العثور على BOT_TOKEN في متغيرات البيئة!")
 
 def make_progress_bar(current, total, length=10):
     if total <= 0:
