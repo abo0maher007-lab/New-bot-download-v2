@@ -1,5 +1,6 @@
 import time
 import asyncio
+import yt_dlp
 from curl_cffi import requests
 
 def format_bytes(size):
@@ -18,54 +19,56 @@ def format_time(seconds):
         return f"{h:02d}:{m:02d}:{s:02d}"
     return f"{m:02d}:{s:02d}"
 
-def download_file_with_progress(url: str, output_path: str, progress_callback):
-    # إعداد جلسة اتصال مع محاكاة متصفح حديث وتحديد كوكيز المرجع
+def download_with_ytdlp(url: str, output_path: str, progress_callback):
+    def ytdlp_hook(d):
+        if d['status'] == 'downloading':
+            downloaded = d.get('downloaded_bytes', 0)
+            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+            speed = d.get('speed', 0) or 0
+            eta = d.get('eta', 0) or 0
+            if progress_callback:
+                progress_callback(downloaded, total, speed, eta)
+
+    ydl_opts = {
+        'outtmpl': output_path,
+        'concurrent_fragment_downloads': 1,
+        'progress_hooks': [ytdlp_hook],
+        'nocheckcertificate': True,
+        'quiet': True,
+        'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'http_headers': {
+            'Referer': 'https://shahidtv.net/',
+            'Origin': 'https://shahidtv.net',
+            'Accept': '*/*',
+            'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+        }
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+def download_with_curlcffi(url: str, output_path: str, progress_callback):
     session = requests.Session()
-    
-    base_headers = {
+    headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
         'Referer': 'https://shahidtv.net/',
         'Origin': 'https://shahidtv.net',
-        'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'video',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
+        'Range': 'bytes=0-',
     }
 
-    # خطوة 1: طلب تمهيدي للصفحة الرئيسية للحصول على كوكيز متوافقة مع السيرفر
-    try:
-        session.get("https://shahidtv.net/", headers=base_headers, impersonate="chrome124", timeout=15)
-    except Exception:
-        pass
-
-    # خطوة 2: طلب جلب الفيديو
     response = session.get(
         url,
-        headers=base_headers,
+        headers=headers,
         impersonate="chrome124",
         stream=True,
         allow_redirects=True,
         timeout=120
     )
-
-    # تجربة محاكاة متصفح Safari أو Edge في حال إرجاع 403
-    if response.status_code in [403, 503]:
-        base_headers['Referer'] = 'https://b2.shahidtv.net/'
-        response = session.get(
-            url,
-            headers=base_headers,
-            impersonate="safari15_5",
-            stream=True,
-            allow_redirects=True,
-            timeout=120
-        )
-
+    
     response.raise_for_status()
-
     total_length = int(response.headers.get('content-length', 0))
 
     downloaded = 0
@@ -77,16 +80,22 @@ def download_file_with_progress(url: str, output_path: str, progress_callback):
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
-                
                 now = time.time()
                 if now - last_update_time >= 1.5 or (total_length > 0 and downloaded == total_length):
                     last_update_time = now
                     elapsed_time = now - start_time
                     speed = downloaded / elapsed_time if elapsed_time > 0 else 0
                     eta = (total_length - downloaded) / speed if speed > 0 and total_length > 0 else 0
-                    
                     if progress_callback:
                         progress_callback(downloaded, total_length, speed, eta)
+
+def download_file_with_progress(url: str, output_path: str, progress_callback):
+    # محاولة التحميل بـ yt-dlp أولاً لتجاوز الحظر
+    try:
+        download_with_ytdlp(url, output_path, progress_callback)
+    except Exception:
+        # البديل الثاني عبر curl_cffi المطور
+        download_with_curlcffi(url, output_path, progress_callback)
 
 async def fetch_video(url: str, output_file: str, progress_callback):
     loop = asyncio.get_running_loop()
