@@ -49,13 +49,12 @@ def download_file_with_progress(url: str, output_path: str, progress_callback):
     last_update_time = start_time
 
     with open(output_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1MB
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
                 
                 now = time.time()
-                # تحديث التقرير كل ثانية ونصف لتجنب حظر Flood limit في تلجرام
                 if now - last_update_time >= 1.5 or downloaded == total_length:
                     last_update_time = now
                     elapsed_time = now - start_time
@@ -66,5 +65,5 @@ def download_file_with_progress(url: str, output_path: str, progress_callback):
                         progress_callback(downloaded, total_length, speed, eta)
 
 async def fetch_video(url: str, output_file: str, progress_callback):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, download_file_with_progress, url, output_file, progress_callback)
