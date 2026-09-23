@@ -19,7 +19,7 @@ def format_time(seconds):
         return f"{h:02d}:{m:02d}:{s:02d}"
     return f"{m:02d}:{s:02d}"
 
-def download_with_ytdlp(url: str, output_path: str, progress_callback):
+def download_with_ytdlp(url: str, output_path: str, progress_callback, proxy: str = None):
     def ytdlp_hook(d):
         if d['status'] == 'downloading':
             downloaded = d.get('downloaded_bytes', 0)
@@ -45,10 +45,13 @@ def download_with_ytdlp(url: str, output_path: str, progress_callback):
         }
     }
 
+    if proxy:
+        ydl_opts['proxy'] = proxy
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
-def download_with_curlcffi(url: str, output_path: str, progress_callback):
+def download_with_curlcffi(url: str, output_path: str, progress_callback, proxy: str = None):
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -59,12 +62,20 @@ def download_with_curlcffi(url: str, output_path: str, progress_callback):
         'Range': 'bytes=0-',
     }
 
+    proxies = None
+    if proxy:
+        proxies = {
+            "http": proxy,
+            "https": proxy
+        }
+
     response = session.get(
         url,
         headers=headers,
         impersonate="chrome124",
         stream=True,
         allow_redirects=True,
+        proxies=proxies,
         timeout=120
     )
     
@@ -89,14 +100,12 @@ def download_with_curlcffi(url: str, output_path: str, progress_callback):
                     if progress_callback:
                         progress_callback(downloaded, total_length, speed, eta)
 
-def download_file_with_progress(url: str, output_path: str, progress_callback):
-    # محاولة التحميل بـ yt-dlp أولاً لتجاوز الحظر
+def download_file_with_progress(url: str, output_path: str, progress_callback, proxy: str = None):
     try:
-        download_with_ytdlp(url, output_path, progress_callback)
+        download_with_ytdlp(url, output_path, progress_callback, proxy)
     except Exception:
-        # البديل الثاني عبر curl_cffi المطور
-        download_with_curlcffi(url, output_path, progress_callback)
+        download_with_curlcffi(url, output_path, progress_callback, proxy)
 
-async def fetch_video(url: str, output_file: str, progress_callback):
+async def fetch_video(url: str, output_file: str, progress_callback, proxy: str = None):
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, download_file_with_progress, url, output_file, progress_callback)
+    await loop.run_in_executor(None, download_file_with_progress, url, output_file, progress_callback, proxy)
