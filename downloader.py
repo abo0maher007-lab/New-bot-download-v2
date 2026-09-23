@@ -21,7 +21,7 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def refresh_proxy_binding():
-    """ربط IP سيرفر Railway بـ Proxy5 عبر الـ API"""
+    """ربط IP سيرفر Railway تلقائياً بـ Proxy5"""
     proxy_key = os.getenv("PROXY_KEY", "").strip()
     if not proxy_key:
         return
@@ -31,13 +31,9 @@ def refresh_proxy_binding():
         urllib.request.urlopen(api_url, timeout=5)
         print(f"✅ Bound Railway IP ({my_ip}) successfully.")
     except Exception as e:
-        print(f"⚠️ Binding update failed: {e}")
+        print(f"⚠️ Proxy binding error: {e}")
 
-def download_file_with_progress(url: str, output_path: str, progress_callback, proxy: str = None):
-    # تجديد الربط قبل كل تنزيل
-    refresh_proxy_binding()
-
-    session = requests.Session()
+def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Accept': '*/*',
@@ -52,26 +48,41 @@ def download_file_with_progress(url: str, output_path: str, progress_callback, p
         'Sec-Fetch-Site': 'same-site',
     }
 
-    proxies = None
+    # المحاولة الأولى: باستخدام البروكسي مع مهلة سريعة (8 ثوانٍ فقط)
+    response = None
     if proxy:
-        proxies = {
-            "http": proxy,
-            "https": proxy
-        }
+        refresh_proxy_binding()
+        try:
+            print("⏳ Trying connection via Proxy...")
+            session = requests.Session()
+            response = session.get(
+                url,
+                headers=headers,
+                impersonate="chrome124",
+                stream=True,
+                allow_redirects=True,
+                proxies={"http": proxy, "https": proxy},
+                timeout=8  # مهلة سريعة لتفادي الانتظار 30 ثانية
+            )
+            response.raise_for_status()
+        except Exception as e:
+            print(f"⚠️ Proxy failed or timed out ({e}). Switching to Direct Download...")
+            response = None
 
-    response = session.get(
-        url,
-        headers=headers,
-        impersonate="chrome124",
-        stream=True,
-        allow_redirects=True,
-        proxies=proxies,
-        timeout=30
-    )
+    # المحاولة الثانية (الفالباك): اتصال مباشر بدون بروكسي بمحاكاة متصفح Chrome
+    if response is None:
+        session = requests.Session()
+        response = session.get(
+            url,
+            headers=headers,
+            impersonate="chrome124",
+            stream=True,
+            allow_redirects=True,
+            timeout=30
+        )
+        response.raise_for_status()
 
-    response.raise_for_status()
     total_length = int(response.headers.get('content-length', 0))
-
     downloaded = 0
     start_time = time.time()
     last_update_time = start_time
@@ -92,4 +103,4 @@ def download_file_with_progress(url: str, output_path: str, progress_callback, p
 
 async def fetch_video(url: str, output_file: str, progress_callback, proxy: str = None):
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, download_file_with_progress, url, output_file, progress_callback, proxy)
+    await loop.run_in_executor(None, perform_download, url, output_file, progress_callback, proxy)
