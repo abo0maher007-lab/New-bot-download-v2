@@ -1,7 +1,6 @@
 import time
 import os
 import asyncio
-import urllib.request
 from curl_cffi import requests
 
 def format_bytes(size):
@@ -20,69 +19,53 @@ def format_time(seconds):
         return f"{h:02d}:{m:02d}:{s:02d}"
     return f"{m:02d}:{s:02d}"
 
-def refresh_proxy_binding():
-    """ربط IP سيرفر Railway تلقائياً بـ Proxy5"""
-    proxy_key = os.getenv("PROXY_KEY", "").strip()
-    if not proxy_key:
-        return
-    try:
-        my_ip = urllib.request.urlopen('https://api.ipify.org', timeout=5).read().decode('utf8').strip()
-        api_url = f"https://proxy5.net/api/g/setip?key={proxy_key}&ip={my_ip}"
-        urllib.request.urlopen(api_url, timeout=5)
-        print(f"✅ Bound Railway IP ({my_ip}) successfully.")
-    except Exception as e:
-        print(f"⚠️ Proxy binding error: {e}")
-
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
+    # إنشاء جلسة متكاملة للتعامل مع TLS Fingerprint لمتصفح Chrome
+    session = requests.Session(impersonate="chrome124")
+    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': '*/*',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
         'Referer': 'https://shahidtv.net/',
         'Origin': 'https://shahidtv.net',
         'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'video',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'cross-site',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1'
     }
 
-    # المحاولة الأولى: باستخدام البروكسي مع مهلة سريعة (8 ثوانٍ فقط)
-    response = None
+    proxies = None
     if proxy:
-        refresh_proxy_binding()
-        try:
-            print("⏳ Trying connection via Proxy...")
-            session = requests.Session()
-            response = session.get(
-                url,
-                headers=headers,
-                impersonate="chrome124",
-                stream=True,
-                allow_redirects=True,
-                proxies={"http": proxy, "https": proxy},
-                timeout=8  # مهلة سريعة لتفادي الانتظار 30 ثانية
-            )
-            response.raise_for_status()
-        except Exception as e:
-            print(f"⚠️ Proxy failed or timed out ({e}). Switching to Direct Download...")
-            response = None
+        proxies = {"http": proxy, "https": proxy}
 
-    # المحاولة الثانية (الفالباك): اتصال مباشر بدون بروكسي بمحاكاة متصفح Chrome
-    if response is None:
-        session = requests.Session()
-        response = session.get(
-            url,
-            headers=headers,
-            impersonate="chrome124",
-            stream=True,
-            allow_redirects=True,
-            timeout=30
-        )
-        response.raise_for_status()
+    # الخطوة الأولى: زيارة الصفحة الرئيسية لإنشاء الجلسة وحفظ Cookies
+    try:
+        session.get("https://shahidtv.net/", headers=headers, proxies=proxies, timeout=10)
+    except Exception as e:
+        print(f"Main page handshake failed: {e}")
 
+    # الخطوة الثانية: إرسال طلب التنزيل مع الهيدرز الخاصة بالفيديو
+    headers['Accept'] = '*/*'
+    headers['Sec-Fetch-Dest'] = 'video'
+    headers['Sec-Fetch-Mode'] = 'cors'
+
+    response = session.get(
+        url,
+        headers=headers,
+        stream=True,
+        allow_redirects=True,
+        proxies=proxies,
+        timeout=30
+    )
+
+    response.raise_for_status()
     total_length = int(response.headers.get('content-length', 0))
+
     downloaded = 0
     start_time = time.time()
     last_update_time = start_time
