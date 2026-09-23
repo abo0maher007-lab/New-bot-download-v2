@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 if not API_ID or not API_HASH or not BOT_TOKEN:
     raise ValueError("❌ خطأ: يجب إدخال API_ID و API_HASH و BOT_TOKEN في متغيرات البيئة (Variables) في Railway!")
 
-app = Client("shahid_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("shahid_bot_new", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 def make_progress_bar(current, total, length=10):
     if total <= 0:
