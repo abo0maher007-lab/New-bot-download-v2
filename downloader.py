@@ -20,7 +20,7 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
-    # إنشاء جلسة محاكاة Chrome 124
+    # إنشاء جلسة impersonate لمحاكاة متصفح Chrome 124 وتجاوز فحص Cloudflare
     session = requests.Session(impersonate="chrome124")
     
     proxies = None
@@ -33,7 +33,7 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
             "https": active_proxy
         }
 
-    # 1. زيارة الموقع الرئيسي (وليس سيرفر الميديا b2) لتأسيس الكوكيز
+    # 1. زيارة الصفحة الرئيسية للموقع الأساسي لبناء كوكيز الحماية والجلسة
     main_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -44,7 +44,7 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
     except Exception as e:
         print(f"Main site handshake skipped: {e}")
 
-    # 2. إرسال الطلب المباشر لرابط الفيديو كاملاً مع الترويسات المخصصة
+    # 2. إرسال طلب التنزيل لرابط الفيديو المباشر مع الترويسات المطلوبة
     download_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Accept': '*/*',
