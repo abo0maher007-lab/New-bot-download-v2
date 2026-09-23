@@ -7,7 +7,6 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from downloader import fetch_video, format_bytes, format_time
 
-# تحميل المتغيرات
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -56,7 +55,7 @@ async def handle_video_download(update: Update, context: ContextTypes.DEFAULT_TY
             f"⬇️ **جاري تحميل الفيديو من السيرفر...**\n\n"
             f"[{bar}] `{percent:.1f}%`\n\n"
             f"🚀 **السرعة:** `{format_bytes(speed)}/s`\n"
-            f"📦 **المحمل:** `{format_bytes(downloaded)}` من `{format_bytes(total)}`\n"
+            f"📦 **المحمل:** `{format_bytes(downloaded)}` من `{format_bytes(total if total > 0 else downloaded)}`\n"
             f"⏱ **الوقت المتبقي:** `{format_time(eta)}`"
         )
         
@@ -67,14 +66,17 @@ async def handle_video_download(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         await fetch_video(url, output_filename, download_progress)
         
-        await status_msg.edit_text("⬆️ اكتمل التحميل، جاري رفع الفيديو إلى تلجرام...")
+        await status_msg.edit_text("⬆️ اكتمل التحميل من السيرفر، جاري رفع الفيديو إلى تلجرام...")
         
         with open(output_filename, 'rb') as video_file:
             await context.bot.send_video(
                 chat_id=update.effective_chat.id,
                 video=video_file,
                 caption="تم التحميل والرفع بنجاح!",
-                supports_streaming=True
+                supports_streaming=True,
+                read_timeout=600,
+                write_timeout=600,
+                connect_timeout=600
             )
             
         await status_msg.delete()
@@ -93,7 +95,7 @@ def main():
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_video_download))
 
-    print("✅ تم تشغيل البوت بنجاح باستخدام python-telegram-bot...")
+    print("✅ تم تشغيل البوت بنجاح...")
     app.run_polling()
 
 if __name__ == '__main__':
