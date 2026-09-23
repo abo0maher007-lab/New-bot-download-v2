@@ -2,21 +2,23 @@ import os
 import time
 import asyncio
 import logging
-from pyrogram import Client, filters
-from pyrogram.types import Message
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from downloader import fetch_video, format_bytes, format_time
 
-# قراءة المتغيرات من بيئة التشغيل
-API_ID = int(os.getenv("API_ID", "0"))
-API_HASH = os.getenv("API_HASH", "")
+# تحميل المتغيرات
+load_dotenv()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-if not API_ID or not API_HASH or not BOT_TOKEN:
-    raise ValueError("❌ خطأ: يجب إدخال API_ID و API_HASH و BOT_TOKEN في متغيرات البيئة (Variables) في Railway!")
-
-app = Client("shahid_bot_v3", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+if not BOT_TOKEN:
+    raise ValueError("❌ خطأ: لم يتم العثور على BOT_TOKEN في البيئة أو ملف .env!")
 
 def make_progress_bar(current, total, length=10):
     if total <= 0:
@@ -25,28 +27,22 @@ def make_progress_bar(current, total, length=10):
     filled = int(length * percentage)
     return "█" * filled + "░" * (length - filled)
 
-@app.on_message(filters.command("start"))
-async def start_cmd(client: Client, message: Message):
-    await message.reply_text("مرحباً بك! أرسل لي رابط الفيديو وسأقوم بتحميله لك مع عرض لوحة التقدم المباشرة.")
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("مرحباً بك! أرسل لي رابط الفيديو وسأقوم بتحميله لك مع عرض لوحة التقدم المباشرة.")
 
-@app.on_message(filters.text & filters.private)
-async def handle_video_download(client: Client, message: Message):
-    if message.text.startswith("/"):
-        return
-
-    url = message.text.strip()
+async def handle_video_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text.strip()
 
     if "b2.shahidtv.net" not in url and "shahidtv.net" not in url:
-        await message.reply_text("الرابط غير مدعوم. يرجى إرسال رابط صحيح من النطاق المطلوب.")
+        await update.message.reply_text("الرابط غير مدعوم. يرجى إرسال رابط صحيح من النطاق المطلوب.")
         return
 
-    status_msg = await message.reply_text("⏳ جاري الاتصال بالسيرفر والتغلب على حماية Cloudflare...")
-    output_filename = f"video_{message.id}.mp4"
+    status_msg = await update.message.reply_text("⏳ جاري الاتصال بالسيرفر والتغلب على حماية Cloudflare...")
+    output_filename = f"video_{update.message.message_id}.mp4"
     
     loop = asyncio.get_running_loop()
     last_update = [0]
 
-    # تقدم التنزيل من السيرفر
     def download_progress(downloaded, total, speed, eta):
         now = time.time()
         if now - last_update[0] < 1.5 and downloaded != total:
@@ -64,48 +60,23 @@ async def handle_video_download(client: Client, message: Message):
             f"⏱ **الوقت المتبقي:** `{format_time(eta)}`"
         )
         
-        asyncio.run_coroutine_threadsafe(status_msg.edit_text(text, parse_mode="Markdown"), loop)
-
-    # تقدم الرفع إلى تلجرام
-    start_upload_time = time.time()
-    async def upload_progress(current, total):
-        now = time.time()
-        if now - last_update[0] < 1.5 and current != total:
-            return
-        last_update[0] = now
-
-        percent = (current / total * 100) if total > 0 else 0
-        bar = make_progress_bar(current, total)
-        elapsed = now - start_upload_time
-        speed = current / elapsed if elapsed > 0 else 0
-        eta = (total - current) / speed if speed > 0 else 0
-
-        text = (
-            f"⬆️ **جاري رفع الفيديو إلى تلجرام...**\n\n"
-            f"[{bar}] `{percent:.1f}%`\n\n"
-            f"🚀 **السرعة:** `{format_bytes(speed)}/s`\n"
-            f"📦 **المرفوع:** `{format_bytes(current)}` من `{format_bytes(total)}`\n"
-            f"⏱ **الوقت المتبقي:** `{format_time(eta)}`"
+        asyncio.run_coroutine_threadsafe(
+            status_msg.edit_text(text, parse_mode="Markdown"), loop
         )
-        
-        try:
-            await status_msg.edit_text(text, parse_mode="Markdown")
-        except Exception:
-            pass
 
     try:
         await fetch_video(url, output_filename, download_progress)
         
-        await status_msg.edit_text("⬆️ اكتمل التحميل، جاري بدء الرفع...")
+        await status_msg.edit_text("⬆️ اكتمل التحميل، جاري رفع الفيديو إلى تلجرام...")
         
-        await client.send_video(
-            chat_id=message.chat.id,
-            video=output_filename,
-            caption="تم التحميل والرفع بنجاح!",
-            supports_streaming=True,
-            progress=upload_progress
-        )
-        
+        with open(output_filename, 'rb') as video_file:
+            await context.bot.send_video(
+                chat_id=update.effective_chat.id,
+                video=video_file,
+                caption="تم التحميل والرفع بنجاح!",
+                supports_streaming=True
+            )
+            
         await status_msg.delete()
 
     except Exception as e:
@@ -116,10 +87,14 @@ async def handle_video_download(client: Client, message: Message):
         if os.path.exists(output_filename):
             os.remove(output_filename)
 
-async def main():
-    await app.start()
-    print("✅ تم تشغيل البوت بنجاح...")
-    await asyncio.Event().wait()
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_video_download))
+
+    print("✅ تم تشغيل البوت بنجاح باستخدام python-telegram-bot...")
+    app.run_polling()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
