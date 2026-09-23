@@ -20,25 +20,26 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
-    # محاكاة متصفح Chrome متكامل
+    # إنشاء جلسة محاكاة متصفح Chrome متكاملة
     session = requests.Session(impersonate="chrome124")
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': '*/*',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
         'Referer': 'https://shahidtv.net/',
         'Origin': 'https://shahidtv.net',
         'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'video',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1'
     }
 
     proxies = None
-    # إعطاء الأولوية للبروكسي الممرر أو جلب قيمة PROXY_URL من المتغيرات
     env_proxy = os.getenv("PROXY_URL", "").strip()
     active_proxy = proxy if (proxy and proxy.strip()) else env_proxy
 
@@ -47,7 +48,21 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
             "http": active_proxy,
             "https": active_proxy
         }
-        print(f"📡 Downloading using Proxy: {active_proxy.split('@')[-1] if '@' in active_proxy else active_proxy}")
+
+    # الخطوة 1: زيارة الموقع الرئيسي أولاً للحصول على ملفات تعريف الارتباط (Cookies) وتجاوز الحماية
+    try:
+        session.get("https://shahidtv.net/", headers=headers, proxies=proxies, timeout=15)
+    except Exception as e:
+        print(f"Handshake warning: {e}")
+
+    # الخطوة 2: تحديث الترويسات لطلب ملف الفيديو الفعلي
+    headers.update({
+        'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+        'Range': 'bytes=0-'
+    })
 
     response = session.get(
         url,
