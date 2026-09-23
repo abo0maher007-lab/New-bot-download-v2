@@ -55,7 +55,7 @@ def download_file_with_progress(url: str, output_path: str, progress_callback):
                 downloaded += len(chunk)
                 
                 now = time.time()
-                # تحديث لوحة التقدم كل ثانية ونصف لتجنب حظر التلجرام
+                # تحديث التقرير كل ثانية ونصف لتجنب حظر Flood limit في تلجرام
                 if now - last_update_time >= 1.5 or downloaded == total_length:
                     last_update_time = now
                     elapsed_time = now - start_time
