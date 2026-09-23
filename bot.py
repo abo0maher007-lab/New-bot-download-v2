@@ -10,6 +10,7 @@ from downloader import fetch_video, format_bytes, format_time
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+PROXY_URL = os.getenv("PROXY_URL", "").strip() or None
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -64,7 +65,7 @@ async def handle_video_download(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
     try:
-        await fetch_video(url, output_filename, download_progress)
+        await fetch_video(url, output_filename, download_progress, proxy=PROXY_URL)
         
         await status_msg.edit_text("⬆️ اكتمل التحميل من السيرفر، جاري رفع الفيديو إلى تلجرام...")
         
