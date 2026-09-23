@@ -20,25 +20,9 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
-    # إنشاء جلسة محاكاة متصفح Chrome متكاملة
+    # إنشاء جلسة محاكاة Chrome 124
     session = requests.Session(impersonate="chrome124")
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
-        'Referer': 'https://shahidtv.net/',
-        'Origin': 'https://shahidtv.net',
-        'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
-    }
-
     proxies = None
     env_proxy = os.getenv("PROXY_URL", "").strip()
     active_proxy = proxy if (proxy and proxy.strip()) else env_proxy
@@ -49,24 +33,36 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
             "https": active_proxy
         }
 
-    # الخطوة 1: زيارة الموقع الرئيسي أولاً للحصول على ملفات تعريف الارتباط (Cookies) وتجاوز الحماية
+    # 1. زيارة الموقع الرئيسي (وليس سيرفر الميديا b2) لتأسيس الكوكيز
+    main_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+    }
     try:
-        session.get("https://shahidtv.net/", headers=headers, proxies=proxies, timeout=15)
+        session.get("https://shahidtv.net/", headers=main_headers, proxies=proxies, timeout=10)
     except Exception as e:
-        print(f"Handshake warning: {e}")
+        print(f"Main site handshake skipped: {e}")
 
-    # الخطوة 2: تحديث الترويسات لطلب ملف الفيديو الفعلي
-    headers.update({
-        'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+    # 2. إرسال الطلب المباشر لرابط الفيديو كاملاً مع الترويسات المخصصة
+    download_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+        'Referer': 'https://shahidtv.net/',
+        'Origin': 'https://shahidtv.net',
+        'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
         'Sec-Fetch-Dest': 'video',
         'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
+        'Sec-Fetch-Site': 'cross-site',
         'Range': 'bytes=0-'
-    })
+    }
 
     response = session.get(
         url,
-        headers=headers,
+        headers=download_headers,
         stream=True,
         allow_redirects=True,
         proxies=proxies,
@@ -93,6 +89,9 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
                     eta = (total_length - downloaded) / speed if speed > 0 and total_length > 0 else 0
                     if progress_callback:
                         progress_callback(downloaded, total_length, speed, eta)
+
+def verify_download(output_path: str) -> bool:
+    return os.path.exists(output_path) and os.path.getsize(output_path) > 0
 
 async def fetch_video(url: str, output_file: str, progress_callback, proxy: str = None):
     loop = asyncio.get_running_loop()
