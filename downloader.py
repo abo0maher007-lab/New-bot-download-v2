@@ -20,40 +20,30 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def perform_download(url: str, output_path: str, progress_callback, proxy: str = None):
-    # إنشاء جلسة متكاملة للتعامل مع TLS Fingerprint لمتصفح Chrome
+    # إنشاء جلسة impersonate للالتفاف على Cloudflare و IP Blocking
     session = requests.Session(impersonate="chrome124")
     
+    # الترويسات الدقيقة المحاكية لمتصفح Chrome على الكمبيوتر
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
         'Referer': 'https://shahidtv.net/',
         'Origin': 'https://shahidtv.net',
         'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'cross-site',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+        'Range': 'bytes=0-',
     }
 
     proxies = None
-    if proxy:
+    if proxy and proxy.strip():
         proxies = {"http": proxy, "https": proxy}
 
-    # الخطوة الأولى: زيارة الصفحة الرئيسية لإنشاء الجلسة وحفظ Cookies
-    try:
-        session.get("https://shahidtv.net/", headers=headers, proxies=proxies, timeout=10)
-    except Exception as e:
-        print(f"Main page handshake failed: {e}")
-
-    # الخطوة الثانية: إرسال طلب التنزيل مع الهيدرز الخاصة بالفيديو
-    headers['Accept'] = '*/*'
-    headers['Sec-Fetch-Dest'] = 'video'
-    headers['Sec-Fetch-Mode'] = 'cors'
-
+    # تنفيذ الطلب المباشر للملف
     response = session.get(
         url,
         headers=headers,
@@ -64,14 +54,17 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
     )
 
     response.raise_for_status()
+    
+    # تحديد حجم الملف الكلي
     total_length = int(response.headers.get('content-length', 0))
 
     downloaded = 0
     start_time = time.time()
     last_update_time = start_time
 
+    # كتابة البيانات وحساب سرعة وشريط التقدم
     with open(output_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=2 * 1024 * 1024):
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
