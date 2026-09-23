@@ -19,46 +19,49 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 def download_file_with_progress(url: str, output_path: str, progress_callback):
-    # ترويسات محدثة لمحاكاة متصفح كروم حقيقي على جهاز كمبيوتر
-    headers = {
+    # إعداد جلسة اتصال مع محاكاة متصفح حديث وتحديد كوكيز المرجع
+    session = requests.Session()
+    
+    base_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
+        'Referer': 'https://shahidtv.net/',
+        'Origin': 'https://shahidtv.net',
         'Sec-Ch-Ua': '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
     }
 
-    # إنشاء جلسة للحفاظ على الكوكيز وحالة الاتصال
-    session = requests.Session()
+    # خطوة 1: طلب تمهيدي للصفحة الرئيسية للحصول على كوكيز متوافقة مع السيرفر
+    try:
+        session.get("https://shahidtv.net/", headers=base_headers, impersonate="chrome124", timeout=15)
+    except Exception:
+        pass
 
-    # طلب مباشر مع محاكاة متصفح Chrome 128 وتتبع التوجيهات
+    # خطوة 2: طلب جلب الفيديو
     response = session.get(
         url,
-        headers=headers,
+        headers=base_headers,
         impersonate="chrome124",
         stream=True,
         allow_redirects=True,
-        timeout=60
+        timeout=120
     )
 
-    if response.status_code == 403:
-        # المحاولة بتغيير الترويسة وبصمة المتصفح إلى Edge إذا رفض الطلب الأول
-        headers['Referer'] = 'https://b2.shahidtv.net/'
+    # تجربة محاكاة متصفح Safari أو Edge في حال إرجاع 403
+    if response.status_code in [403, 503]:
+        base_headers['Referer'] = 'https://b2.shahidtv.net/'
         response = session.get(
             url,
-            headers=headers,
-            impersonate="edge101",
+            headers=base_headers,
+            impersonate="safari15_5",
             stream=True,
             allow_redirects=True,
-            timeout=60
+            timeout=120
         )
 
     response.raise_for_status()
@@ -70,7 +73,7 @@ def download_file_with_progress(url: str, output_path: str, progress_callback):
     last_update_time = start_time
 
     with open(output_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=2 * 1024 * 1024):  # 2MB لسرعة أفضل
+        for chunk in response.iter_content(chunk_size=2 * 1024 * 1024):
             if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
