@@ -43,12 +43,12 @@ def download_via_curl_cffi(url: str, output_path: str, progress_callback, proxie
 
     # تهيئة الجلسة مع الموقع الرئيسي لجلب الكوكيز لتجاوز حماية Cloudflare
     try:
-        session.get("https://b2.shahidtv.net/", headers={'User-Agent': headers['User-Agent']}, proxies=proxies, timeout=10)
+        session.get("https://b2.shahidtv.net/", headers={'User-Agent': headers['User-Agent']}, proxies=proxies, timeout=90)
     except Exception as e:
         print(f"Handshake notice: {e}")
 
     # طلب ملف الميديا
-    response = session.get(url, headers=headers, stream=True, allow_redirects=True, proxies=proxies, timeout=45)
+    response = session.get(url, headers=headers, stream=True, allow_redirects=True, proxies=proxies, timeout=90)
     response.raise_for_status()
 
     total_length = int(response.headers.get('content-length', 0))
