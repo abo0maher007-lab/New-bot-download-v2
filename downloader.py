@@ -40,7 +40,7 @@ def perform_download(url: str, output_path: str, progress_callback, proxy: str =
         'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
     }
     try:
-        session.get("https://shahidtv.net/", headers=main_headers, proxies=proxies, timeout=10)
+        session.get("https://shahidtv.net/", headers=main_headers, proxies=proxies, timeout=90)
     except Exception as e:
         print(f"Main site handshake skipped: {e}")
 
